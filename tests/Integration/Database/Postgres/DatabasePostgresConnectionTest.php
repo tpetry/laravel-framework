@@ -5,6 +5,7 @@ namespace Illuminate\Tests\Integration\Database\Postgres;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Orchestra\Testbench\Attributes\RequiresDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\RequiresOperatingSystem;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
@@ -100,6 +101,22 @@ class DatabasePostgresConnectionTest extends PostgresTestCase
         ]);
 
         $this->assertSame($count, DB::table('json_table')->whereJsonContainsKey($column)->count());
+    }
+
+    #[RequiresDatabase('pgsql', '>=19dev')]
+    public function testLastCommitReadAfterWrite()
+    {
+        $first = DB::getLastCommitId();
+        DB::table('json_table')->insert(['json_col' => '{"commit":"read-after-write"}']);
+        $second = DB::getLastCommitId();
+        $merged = DB::mergeCommitIds([$second, $first]);
+
+        $this->assertNotSame($first, $second);
+        $this->assertSame($second, $merged);
+        $this->assertTrue(DB::hasCommitId($first));
+        $this->assertTrue(DB::hasCommitId($second));
+        $this->assertTrue(DB::hasCommitId($merged));
+        $this->assertFalse(DB::hasCommitId('FFFFFFFF/FFFFFFFF'));
     }
 
     public static function jsonContainsKeyDataProvider()
